@@ -1,18 +1,17 @@
 #!/usr/bin/env python
-"""WhisperDB Python Pandas Reader.
-
-https://github.com/graphite-project/whisper
-https://graphite.readthedocs.io/en/stable/whisper.html
-
-This was started because the existing dump and fetch
-implementation has some issues:
-https://github.com/graphite-project/whisper/issues/305
-"""
+"""WhisperDB Python Pandas Reader."""
 import dataclasses
 import argparse
 from pathlib import Path
 import numpy as np
 import pandas as pd
+
+__all__ = [
+    "WhisperFile",
+    "WhisperMeta",
+    "WhisperArchive",
+    "WhisperArchiveMeta",
+]
 
 
 @dataclasses.dataclass()
@@ -22,6 +21,16 @@ class WhisperArchiveMeta:
 
 @dataclasses.dataclass()
 class WhisperMeta:
+    pass
+
+
+@dataclasses.dataclass()
+class WhisperArchive:
+    pass
+
+
+@dataclasses.dataclass()
+class WhisperFile:
     pass
 
 
