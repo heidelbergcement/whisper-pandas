@@ -3,71 +3,113 @@
 import dataclasses
 import argparse
 from pathlib import Path
+from typing import List
 import numpy as np
 import pandas as pd
 
 __all__ = [
     "WhisperFile",
     "WhisperMeta",
-    "WhisperArchive",
+    "WhisperArchiveData",
     "WhisperArchiveMeta",
 ]
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class WhisperArchiveMeta:
-    pass
+    """Whisper archive metadata."""
+    index: int
+    offset: int
+    seconds_per_point: int
+    points: int
+    retention: int
+
+    @property
+    def size(self):
+        return 12 * self.points
+
+    def print_info(self):
+        print("archive:", self.index)
+        print("offset:", self.offset)
+        print("seconds_per_point:", self.seconds_per_point)
+        print("points:", self.points)
+        print("retention:", self.retention)
+        print("size:", self.size)
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class WhisperMeta:
-    pass
+    """Whisper file metadata."""
+    path: str
+    aggregation_method: str
+    max_retention: int
+    x_files_factor: float
+    archives: List[WhisperArchiveMeta]
+
+    @classmethod
+    def read(cls, path) -> "WhisperMeta":
+        # TODO: replacado by selber parsen
+        import whisper
+        info = whisper.info(path)
+        archives = []
+        for index, _ in enumerate(info["archives"]):
+            archive = WhisperArchiveMeta(
+                index=index,
+                offset=_["offset"],
+                seconds_per_point=_["secondsPerPoint"],
+                points=_["points"],
+                retention=_["retention"],
+            )
+            archives.append(archive)
+
+        return WhisperMeta(
+            path=str(path),
+            aggregation_method=info["aggregationMethod"],
+            max_retention=info["maxRetention"],
+            x_files_factor=info["xFilesFactor"],
+            archives=archives
+        )
+
+    @property
+    def header_size(self) -> int:
+        """Whisper file header size in bytes"""
+        return 16 + 12 * len(self.archives)
+
+    @property
+    def file_size(self) -> int:
+        """Whisper file total size in bytes"""
+        return self.header_size + sum(archive.size for archive in self.archives)
+
+    def print_info(self):
+        print("path:", self.path)
+        print("aggregation_method:", self.aggregation_method)
+        print("max_retention:", self.max_retention)
+        print("x_files_factor:", self.x_files_factor)
+
+        for archive in self.archives:
+            print()
+            archive.print_info()
+
+        size_actual = Path(self.path).stat().st_size
+        size_expected = self.file_size
+
+        if size_actual != size_expected:
+            print("\n*** FILE IS CORRUPT! ***")
+            print("actual size:", size_actual)
+            print("expected size:", size_expected)
 
 
-@dataclasses.dataclass()
-class WhisperArchive:
-    pass
+@dataclasses.dataclass
+class WhisperArchiveData:
+    """Whisper archive data."""
+    raw: np.ndarray
 
 
-@dataclasses.dataclass()
+@dataclasses.dataclass
 class WhisperFile:
-    pass
-
-
-def whisper_info(path: str) -> dict:
-    """Re-implementation of whisper.info to be standalone."""
-    import whisper
-    return whisper.info(path)
-
-
-def whisper_file_size(info: dict) -> int:
-    """Compute expected file size in bytes for a given whisper.info"""
-    size_meta = 16
-    size_archive_info = 12
-    size_point = 12
-    size_header = size_meta + len(info["archives"]) * size_archive_info
-    size_total = size_header + sum(_["points"] * size_point for _ in info["archives"])
-    return size_total
-
-
-def whisper_info_print(path: str) -> None:
-    info = whisper_info(path)
-    size_actual = Path(path).stat().st_size
-    size_expected = whisper_file_size(info)
-
-    print(f"\npath: {path}\n")
-
-    if size_actual != size_expected:
-        print("FILE IS CORRUPT!")
-        print(f" actual size: {size_actual}")
-        print(f" expected size: {size_expected}")
-
-    print()
-    print(f"aggregationMethod: {info['aggregationMethod']}")
-    print(f"maxRetention: {info['maxRetention']}")
-    print(f"xFilesFactor: {info['xFilesFactor']}")
-    print(f"fileSize: {size_actual}")
-    print()
+    """Whisper file (the whole enchilada, meta + data)."""
+    meta: WhisperMeta
+    data: List[WhisperArchiveData]
 
 
 def read_whisper_archive(path: str, archive_id: int, dtype: str = "float32") -> pd.Series:
@@ -83,14 +125,17 @@ def read_whisper_archive(path: str, archive_id: int, dtype: str = "float32") -> 
         Value float data type
     """
 
-    infos = whisper_info(path)
-    if archive_id < 0 or archive_id >= len(infos["archives"]):
+    meta = WhisperMeta.read(path)
+    if archive_id < 0 or archive_id >= len(meta.archives):
         raise ValueError(f"Invalid archive_id = {archive_id}")
 
-    info = infos["archives"][archive_id]
+    info = meta.archives[archive_id]
     data = np.fromfile(
-        path, dtype=np.dtype([("time", ">u4"), ("val", ">f8")]), count=info["points"], offset=info["offset"]
+        path, dtype=np.dtype([("time", ">u4"), ("val", ">f8")]), count=info.points, offset=info.offset
     )
+
+    # That's right, señor. We remove all points with `time==0`.
+    # The spec doesn't say, but apparamento this is what it takes.
     data = data[data["time"] != 0]
 
     # The type cast for the values is needed to avoid this error later on
@@ -111,7 +156,12 @@ def cli():
     parser = argparse.ArgumentParser()
     parser.add_argument("path")
     args = parser.parse_args()
-    whisper_info_print(args.path)
+    meta = WhisperMeta.read(args.path)
+    meta.print_info()
+
+    print(read_whisper_archive(args.path, archive_id=0))
+    print(read_whisper_archive(args.path, archive_id=1))
+    print(read_whisper_archive(args.path, archive_id=2))
 
 
 if __name__ == '__main__':
