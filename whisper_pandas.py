@@ -12,7 +12,16 @@ __all__ = [
     "WhisperMeta",
     "WhisperArchiveData",
     "WhisperArchiveMeta",
+    "read_whisper_archive",
 ]
+
+
+class WhisperBytes:
+    """Size of Whisper file elements in bytes"""
+    # See https://graphite.readthedocs.io/en/latest/whisper.html#database-format
+    point = 12
+    archive_info = 12
+    meta = 16
 
 
 @dataclasses.dataclass
@@ -26,7 +35,7 @@ class WhisperArchiveMeta:
 
     @property
     def size(self):
-        return 12 * self.points
+        return WhisperBytes.point * self.points
 
     def print_info(self):
         print("archive:", self.index)
@@ -73,12 +82,22 @@ class WhisperMeta:
     @property
     def header_size(self) -> int:
         """Whisper file header size in bytes"""
-        return 16 + 12 * len(self.archives)
+        return WhisperBytes.meta + WhisperBytes.archive_info * len(self.archives)
 
     @property
     def file_size(self) -> int:
         """Whisper file total size in bytes"""
         return self.header_size + sum(archive.size for archive in self.archives)
+
+    @property
+    def file_size_actual(self) -> int:
+        """Actual file size in bytes"""
+        return Path(self.path).stat().st_size
+
+    @property
+    def file_size_mismatch(self) -> bool:
+        """Does actual and expected file size according to header match?"""
+        return self.file_size == self.file_size_actual
 
     def print_info(self):
         print("path:", self.path)
@@ -90,13 +109,10 @@ class WhisperMeta:
             print()
             archive.print_info()
 
-        size_actual = Path(self.path).stat().st_size
-        size_expected = self.file_size
-
-        if size_actual != size_expected:
+        if self.file_size_mismatch:
             print("\n*** FILE IS CORRUPT! ***")
-            print("actual size:", size_actual)
-            print("expected size:", size_expected)
+            print("actual size:", self.file_size_actual)
+            print("expected size:", self.file_size)
 
 
 @dataclasses.dataclass
@@ -124,7 +140,6 @@ def read_whisper_archive(path: str, archive_id: int, dtype: str = "float32") -> 
     dtype : {"float32", "float64"}
         Value float data type
     """
-
     meta = WhisperMeta.read(path)
     if archive_id < 0 or archive_id >= len(meta.archives):
         raise ValueError(f"Invalid archive_id = {archive_id}")
