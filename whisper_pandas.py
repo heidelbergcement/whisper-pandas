@@ -71,7 +71,7 @@ class WhisperMeta:
             )
             archives.append(archive)
 
-        return WhisperMeta(
+        return cls(
             path=str(path),
             aggregation_method=info["aggregationMethod"],
             max_retention=info["maxRetention"],
@@ -127,6 +127,22 @@ class WhisperFile:
     meta: WhisperMeta
     data: List[WhisperArchiveData]
 
+    @classmethod
+    def read(cls, path) -> "WhisperFile":
+        # TODO: refactor into a single read
+        meta = WhisperMeta.read(path)
+
+        data = []
+        for archive in meta.archives:
+            series = read_whisper_archive(path, archive_id=archive.index)
+            data.append(series)
+
+        return cls(meta=meta, data=data)
+
+    def print_info(self):
+        self.meta.print_info()
+
+
 # TODO: add test, then refactor this to WhisperFile.read
 # TODO: then add ZIP support
 
@@ -168,7 +184,7 @@ def read_whisper_archive(path: str, archive_id: int, dtype: str = "float32") -> 
     return pd.Series(val, index).sort_index()
 
 
-def cli():
+def main():
     """Command line tool"""
     parser = argparse.ArgumentParser()
     parser.add_argument("path")
@@ -182,4 +198,4 @@ def cli():
 
 
 if __name__ == '__main__':
-    cli()
+    main()

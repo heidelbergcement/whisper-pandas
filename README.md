@@ -2,18 +2,26 @@
 
 ## Getting started
 
+Install:
 ```
 pip install whisper-pandas
 ```
 
+Use as Python package:
 ```
 >>> from whisper_pandas import WhisperFile
->>> wsp = WhisperFile.read("data.wsp")
+>>> wsp = WhisperFile.read("example.wsp")
 >>> wsp.print_info()
 TBD
 >>> wsp.archive[1].data
 TBD
 ```
+
+Use as command line tool:
+```
+whisper-pandas example.wsp
+```
+
 
 ## Description
 
