@@ -2,7 +2,7 @@ import pytest
 import pandas as pd
 from numpy.testing import assert_allclose
 
-from whisper_pandas import WhisperFile, WhisperMeta, read_whisper_archive
+from whisper_pandas import WhisperFile, WhisperMeta
 
 
 @pytest.fixture(scope="session")
@@ -29,7 +29,7 @@ def test_meta(meta):
 
 def test_data_archive_1(wsp):
     """Test if data is read and converted to pandas OK."""
-    s = read_whisper_archive(wsp.meta.path, archive_id=1)
+    s = wsp.data[1]
 
     assert len(s) == 2331015
     assert s.dtype == "float32"
@@ -44,9 +44,8 @@ def test_data_archive_1(wsp):
 
 
 def test_data_archive_0(wsp):
-    s = read_whisper_archive(wsp.meta.path, archive_id=0)
+    s = wsp.data[0]
     assert len(s) == 1555200
-    print(s)
 
     assert s.index[0] == pd.Timestamp("2020-07-29 08:28:10+0000")
     assert s.index[-1] == pd.Timestamp("2021-07-20 13:39:30+0000")
@@ -54,9 +53,8 @@ def test_data_archive_0(wsp):
 
 
 def test_data_archive_2(wsp):
-    s = read_whisper_archive(wsp.meta.path, archive_id=2)
+    s = wsp.data[2]
     assert len(s) == 38855
-    print(s)
 
     assert s.index[0] == pd.Timestamp("2017-02-10 07:00:00+0000")
     assert s.index[-1] == pd.Timestamp("2021-07-20 13:00:00+0000")

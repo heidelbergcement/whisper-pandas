@@ -6,27 +6,27 @@ from pathlib import Path
 from typing import List
 import numpy as np
 import pandas as pd
+import whisper
 
 __all__ = [
     "WhisperFile",
     "WhisperMeta",
-    "WhisperArchiveData",
     "WhisperArchiveMeta",
-    "read_whisper_archive",
 ]
 
+# Whisper file element formats
+# See https://graphite.readthedocs.io/en/latest/whisper.html#database-format
 
-class WhisperBytes:
-    """Size of Whisper file elements in bytes"""
-    # See https://graphite.readthedocs.io/en/latest/whisper.html#database-format
-    point = 12
-    archive_info = 12
-    meta = 16
+FMT_POINT = np.dtype([("time", ">u4"), ("val", ">f8")])
+# TODO: change to format dtype and use it for parsing header
+N_ARCHIVE = 12
+N_META = 16
 
 
 @dataclasses.dataclass
 class WhisperArchiveMeta:
     """Whisper archive metadata."""
+
     index: int
     offset: int
     seconds_per_point: int
@@ -35,7 +35,7 @@ class WhisperArchiveMeta:
 
     @property
     def size(self):
-        return WhisperBytes.point * self.points
+        return FMT_POINT.itemsize * self.points
 
     def print_info(self):
         print("archive:", self.index)
@@ -49,6 +49,7 @@ class WhisperArchiveMeta:
 @dataclasses.dataclass
 class WhisperMeta:
     """Whisper file metadata."""
+
     path: str
     aggregation_method: str
     max_retention: int
@@ -57,8 +58,6 @@ class WhisperMeta:
 
     @classmethod
     def read(cls, path) -> "WhisperMeta":
-        # TODO: replacado by selber parsen
-        import whisper
         info = whisper.info(path)
         archives = []
         for index, _ in enumerate(info["archives"]):
@@ -76,13 +75,13 @@ class WhisperMeta:
             aggregation_method=info["aggregationMethod"],
             max_retention=info["maxRetention"],
             x_files_factor=info["xFilesFactor"],
-            archives=archives
+            archives=archives,
         )
 
     @property
     def header_size(self) -> int:
         """Whisper file header size in bytes"""
-        return WhisperBytes.meta + WhisperBytes.archive_info * len(self.archives)
+        return N_META + N_ARCHIVE * len(self.archives)
 
     @property
     def file_size(self) -> int:
@@ -116,25 +115,43 @@ class WhisperMeta:
 
 
 @dataclasses.dataclass
-class WhisperArchiveData:
-    """Whisper archive data."""
-    raw: np.ndarray
-
-
-@dataclasses.dataclass
 class WhisperFile:
     """Whisper file (the whole enchilada, meta + data)."""
+
     meta: WhisperMeta
-    data: List[WhisperArchiveData]
+    data: List[pd.Series]
 
     @classmethod
-    def read(cls, path) -> "WhisperFile":
-        # TODO: refactor into a single read
+    def read(
+        cls, path, archives: List[int] = None, dtype: str = "float32"
+    ) -> "WhisperFile":
+        """Read Whisper archive into a pandas.Series.
+
+        Parameters
+        ----------
+        path : str
+            Filename
+        archives : list
+            List of archive IDs to read.
+            Highest time resolution is archive 0.
+            Default: all
+        dtype : {"float32", "float64"}
+            Value float data type
+        """
         meta = WhisperMeta.read(path)
 
+        if archives is None:
+            archives = list(range(len(meta.archives)))
+
         data = []
-        for archive in meta.archives:
-            series = read_whisper_archive(path, archive_id=archive.index)
+        for archive_id in archives:
+            if archive_id in archives:
+                series = read_whisper_archive(
+                    path, info=meta.archives[archive_id], dtype=dtype
+                )
+            else:
+                series = None
+
             data.append(series)
 
         return cls(meta=meta, data=data)
@@ -143,29 +160,10 @@ class WhisperFile:
         self.meta.print_info()
 
 
-# TODO: add test, then refactor this to WhisperFile.read
-# TODO: then add ZIP support
-
-def read_whisper_archive(path: str, archive_id: int, dtype: str = "float32") -> pd.Series:
-    """Read Whisper archive into a pandas.Series.
-
-    Parameters
-    ----------
-    path : str
-        Filename
-    archive_id : int
-        Archive ID (highest time resolution is 0)
-    dtype : {"float32", "float64"}
-        Value float data type
-    """
-    meta = WhisperMeta.read(path)
-    if archive_id < 0 or archive_id >= len(meta.archives):
-        raise ValueError(f"Invalid archive_id = {archive_id}")
-
-    info = meta.archives[archive_id]
-    data = np.fromfile(
-        path, dtype=np.dtype([("time", ">u4"), ("val", ">f8")]), count=info.points, offset=info.offset
-    )
+def read_whisper_archive(
+    path: str, info: WhisperArchiveMeta, dtype: str = "float32"
+) -> pd.Series:
+    data = np.fromfile(path, dtype=FMT_POINT, count=info.points, offset=info.offset)
 
     # That's right, señor. We remove all points with `time==0`.
     # The spec doesn't say, but apparamento this is what it takes.
@@ -192,10 +190,6 @@ def main():
     meta = WhisperMeta.read(args.path)
     meta.print_info()
 
-    print(read_whisper_archive(args.path, archive_id=0))
-    print(read_whisper_archive(args.path, archive_id=1))
-    print(read_whisper_archive(args.path, archive_id=2))
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

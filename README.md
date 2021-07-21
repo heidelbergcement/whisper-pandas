@@ -56,7 +56,8 @@ Why?
 * Mucho less likely you will shoot yourself in the foot
 * Mucho speedy
 
-It's a from-scratch Whisper read implementation using Numpy & Pandas,
+Currently we use `whisper.info` internally to read the metadata,
+and then Numpy & Pandas to read the data,
 using objects for the metadata and some conveniences like quickly
 showing what data is available in a given file or reading zipped files.
 
