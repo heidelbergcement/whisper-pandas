@@ -61,5 +61,13 @@ def test_data_archive_2(wsp):
     assert_allclose(s.iloc[-1], 4.099754, atol=1e-5)
 
 
+def test_read_only_some_archives():
+    wsp = WhisperFile.read("example.wsp", archives=[2, 1])
+    assert len(wsp.data) == 3
+    assert wsp.data[0] is None
+    assert len(wsp.data[1]) == 2331015
+    assert len(wsp.data[2]) == 38855
+
+
 def test_print_info(wsp):
     wsp.print_info()

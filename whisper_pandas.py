@@ -140,12 +140,9 @@ class WhisperFile:
         """
         meta = WhisperFileMeta.read(path)
 
-        if archives is None:
-            archives = list(range(len(meta.archives)))
-
         data = []
-        for archive_id in archives:
-            if archive_id in archives:
+        for archive_id in range(len(meta.archives)):
+            if archives is None or archive_id in archives:
                 series = read_whisper_archive(
                     path, info=meta.archives[archive_id], dtype=dtype
                 )
@@ -155,6 +152,9 @@ class WhisperFile:
             data.append(series)
 
         return cls(meta=meta, data=data)
+
+    def read_zip(self, path: str):
+        raise NotImplementedError()
 
     def print_info(self):
         self.meta.print_info()
