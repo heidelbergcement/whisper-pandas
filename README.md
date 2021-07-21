@@ -3,12 +3,12 @@
 ## Getting started
 
 ```
-pip install whisper_pandas
+pip install whisper-pandas
 ```
 
 ```
 >>> from whisper_pandas import WhisperFile
->>> wsp = WhisperFile("data.wsp")
+>>> wsp = WhisperFile.read("data.wsp")
 >>> wsp.print_info()
 TBD
 >>> wsp.archive[1].data
@@ -22,7 +22,7 @@ WhisperDB is a fixed-size time series format (see [docs](https://graphite.readth
 The official Python package is here: [whisper](https://github.com/graphite-project/whisper)
 
 You should use it, except if you like [Pandas](https://pandas.pydata.org/) and only need
-to read (not write) Whisper files, then you should use `whisper_pandas`.
+to read (not write) Whisper files, then you should use `whisper-pandas`.
 
 Why?
 

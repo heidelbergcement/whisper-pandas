@@ -97,7 +97,7 @@ class WhisperMeta:
     @property
     def file_size_mismatch(self) -> bool:
         """Does actual and expected file size according to header match?"""
-        return self.file_size == self.file_size_actual
+        return self.file_size != self.file_size_actual
 
     def print_info(self):
         print("path:", self.path)
@@ -127,6 +127,8 @@ class WhisperFile:
     meta: WhisperMeta
     data: List[WhisperArchiveData]
 
+# TODO: add test, then refactor this to WhisperFile.read
+# TODO: then add ZIP support
 
 def read_whisper_archive(path: str, archive_id: int, dtype: str = "float32") -> pd.Series:
     """Read Whisper archive into a pandas.Series.
