@@ -10,7 +10,7 @@ import whisper
 
 __all__ = [
     "WhisperFile",
-    "WhisperMeta",
+    "WhisperFileMeta",
     "WhisperArchiveMeta",
 ]
 
@@ -47,7 +47,7 @@ class WhisperArchiveMeta:
 
 
 @dataclasses.dataclass
-class WhisperMeta:
+class WhisperFileMeta:
     """Whisper file metadata."""
 
     path: str
@@ -57,7 +57,7 @@ class WhisperMeta:
     archives: List[WhisperArchiveMeta]
 
     @classmethod
-    def read(cls, path) -> "WhisperMeta":
+    def read(cls, path) -> "WhisperFileMeta":
         info = whisper.info(path)
         archives = []
         for index, _ in enumerate(info["archives"]):
@@ -118,7 +118,7 @@ class WhisperMeta:
 class WhisperFile:
     """Whisper file (the whole enchilada, meta + data)."""
 
-    meta: WhisperMeta
+    meta: WhisperFileMeta
     data: List[pd.Series]
 
     @classmethod
@@ -138,7 +138,7 @@ class WhisperFile:
         dtype : {"float32", "float64"}
             Value float data type
         """
-        meta = WhisperMeta.read(path)
+        meta = WhisperFileMeta.read(path)
 
         if archives is None:
             archives = list(range(len(meta.archives)))
@@ -187,7 +187,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("path")
     args = parser.parse_args()
-    meta = WhisperMeta.read(args.path)
+    meta = WhisperFileMeta.read(args.path)
     meta.print_info()
 
 

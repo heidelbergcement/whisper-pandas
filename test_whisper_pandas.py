@@ -2,7 +2,7 @@ import pytest
 import pandas as pd
 from numpy.testing import assert_allclose
 
-from whisper_pandas import WhisperFile, WhisperMeta
+from whisper_pandas import WhisperFile, WhisperFileMeta
 
 
 @pytest.fixture(scope="session")
@@ -11,7 +11,7 @@ def wsp() -> WhisperFile:
 
 
 @pytest.fixture(scope="session")
-def meta(wsp) -> WhisperMeta:
+def meta(wsp) -> WhisperFileMeta:
     return wsp.meta
 
 
