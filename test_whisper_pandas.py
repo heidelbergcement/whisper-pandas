@@ -2,7 +2,7 @@ import pytest
 import pandas as pd
 from numpy.testing import assert_allclose
 
-from whisper_pandas import WhisperFile, WhisperFileMeta
+from whisper_pandas import WhisperFile, WhisperFileMeta, WhisperArchiveMeta
 
 
 @pytest.fixture(scope="session")
@@ -22,9 +22,27 @@ def test_meta(meta):
     assert meta.max_retention == 315363600
     assert_allclose(meta.x_files_factor, 0.5)
 
-    assert meta.archives[0].seconds_per_point == 10
-    assert meta.archives[1].seconds_per_point == 60
-    assert meta.archives[2].seconds_per_point == 3600
+    assert meta.header_size == 52
+    assert meta.file_size == 82785664
+    assert meta.file_size_actual == 82785664
+    assert meta.file_size_mismatch is False
+
+    assert len(meta.archives) == 3
+    assert meta.archives[0] == WhisperArchiveMeta(
+        index=0, offset=52, seconds_per_point=10, points=1555200
+    )
+    assert meta.archives[1] == WhisperArchiveMeta(
+        index=1,
+        offset=18662452,
+        seconds_per_point=60,
+        points=5256000,
+    )
+    assert meta.archives[2] == WhisperArchiveMeta(
+        index=2,
+        offset=81734452,
+        seconds_per_point=3600,
+        points=87601,
+    )
 
 
 def test_data_archive_1(wsp):
