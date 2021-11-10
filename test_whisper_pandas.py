@@ -2,12 +2,17 @@ import pytest
 import pandas as pd
 from numpy.testing import assert_allclose
 
-from whisper_pandas import WhisperFile, WhisperFileMeta, WhisperArchiveMeta
+from whisper_pandas import WhisperFile, WhisperFileMeta, WhisperArchiveMeta, print_meta
 
 
 @pytest.fixture(scope="session")
-def wsp() -> WhisperFile:
-    return WhisperFile.read("example.wsp")
+def wsp_path() -> str:
+    return "example.wsp"
+
+
+@pytest.fixture(scope="session")
+def wsp(wsp_path) -> WhisperFile:
+    return WhisperFile.read(wsp_path)
 
 
 @pytest.fixture(scope="session")
@@ -87,5 +92,5 @@ def test_read_only_some_archives():
     assert len(wsp.data[2]) == 38855
 
 
-def test_print_info(wsp):
-    wsp.print_info()
+def test_print_meta(wsp_path):
+    print_meta(wsp_path)

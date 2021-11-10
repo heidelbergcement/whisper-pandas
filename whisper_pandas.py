@@ -11,6 +11,7 @@ __all__ = [
     "WhisperFile",
     "WhisperFileMeta",
     "WhisperArchiveMeta",
+    "print_meta",
 ]
 
 # Whisper file element formats
@@ -54,7 +55,7 @@ class WhisperArchiveMeta:
         return cls(
             index=index,
             offset=int(meta["offset"]),
-            seconds_per_point=float(meta["seconds_per_point"]),
+            seconds_per_point=int(meta["seconds_per_point"]),
             points=int(meta["points"]),
         )
 
@@ -239,13 +240,18 @@ def read_whisper_archive_dataframe(
     return df
 
 
+def print_meta(path: str):
+    wsp = WhisperFile.read(path)
+    wsp.meta.print_info()
+
+
 def main():
     """Command line tool"""
     parser = argparse.ArgumentParser()
     parser.add_argument("path")
     args = parser.parse_args()
-    meta = WhisperFileMeta.read(args.path)
-    meta.print_info()
+
+    print_meta(args.path)
 
 
 if __name__ == "__main__":
