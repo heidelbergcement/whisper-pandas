@@ -102,7 +102,7 @@ class WhisperFileMeta:
 
     @classmethod
     def from_buffer(cls, buffer, path) -> "WhisperFileMeta":
-        file_meta = cls._meta_from_buffer(buffer[0 : FMT_FILE_META.itemsize])
+        file_meta = cls._meta_from_buffer(buffer[0: FMT_FILE_META.itemsize])
         archives = []
         for idx in range(file_meta["archive_count"]):
             archive_meta = WhisperArchiveMeta.from_buffer(buffer, idx)
@@ -149,12 +149,13 @@ class WhisperFileMeta:
             print()
             archive.print_info()
 
+
 @dataclasses.dataclass
 class WhisperArchive:
     """Whisper file single archive."""
 
     meta: WhisperArchiveMeta
-    bytes: bytes
+    bytes: bytes = dataclasses.field(repr=False)
 
     def as_numpy(self):
         return np.frombuffer(
@@ -196,7 +197,7 @@ class WhisperFile:
     """Whisper file (metadata and all archives)."""
 
     meta: WhisperFileMeta
-    bytes: bytes
+    bytes: bytes = dataclasses.field(repr=False)
 
     @classmethod
     def read(cls, path: str, compression: str = "infer") -> "WhisperFile":

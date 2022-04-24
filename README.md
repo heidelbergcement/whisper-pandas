@@ -20,7 +20,7 @@ Use as Python package:
  WhisperArchiveMeta(index=2, offset=81734452, seconds_per_point=3600, points=87601, retention=315363600)]
 
 # Simple to work with data as `pandas.Series`
->>> wsp.data[1]
+>>> wsp.archives[1].as_series()
 2017-02-10 07:07:00+00:00    0.000000
 2017-02-10 07:08:00+00:00    0.000000
 2017-02-10 07:09:00+00:00    0.000000
@@ -56,9 +56,7 @@ Why?
 * Mucho less likely you will shoot yourself in the foot
 * Mucho speedy
 
-Partial reading is not implemented, a given file is always read completely
-and the data directly converted to columnar `pandas.Series` format with
-a datetime index.
+A given file is always read completely into memory, partial read of metadata or archives is not supported.
 
 ## Development
 
