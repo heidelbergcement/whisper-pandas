@@ -8,7 +8,7 @@ from whisper_pandas import WhisperFile, WhisperFileMeta, WhisperArchiveMeta
 
 @pytest.fixture(scope="session")
 def wsp() -> WhisperFile:
-    return WhisperFile.read("example.wsp")
+    return WhisperFile.read("data/example.wsp")
 
 
 @pytest.fixture(scope="session")
@@ -18,7 +18,7 @@ def meta(wsp) -> WhisperFileMeta:
 
 def test_meta(meta):
     """Test if meta data is read OK."""
-    assert meta.path == "example.wsp"
+    assert meta.path == "data/example.wsp"
     assert meta.aggregation_method == "average"
     assert meta.max_retention == 315363600
     assert_allclose(meta.x_files_factor, 0.5)
@@ -75,7 +75,7 @@ def test_data_archive_2(wsp):
 
 
 def test_read_only_some_archives():
-    wsp = WhisperFile.read("example.wsp", archives=[2, 1])
+    wsp = WhisperFile.read("data/example.wsp", archives=[2, 1])
     assert len(wsp.data) == 3
     assert wsp.data[0] is None
     assert len(wsp.data[1]) == 2331015

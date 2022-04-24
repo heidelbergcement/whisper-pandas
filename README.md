@@ -11,7 +11,7 @@ Use as Python package:
 ```
 # Simple to read any Whisper file
 >>> from whisper_pandas import WhisperFile
->>> wsp = WhisperFile.read("example.wsp")
+>>> wsp = WhisperFile.read("data/example.wsp")
 
 # Simple to work with metadata as objects
 >>> wsp.meta.archives
@@ -37,7 +37,7 @@ Length: 2331015, dtype: float32
 
 Use as command line tool:
 ```
-whisper-pandas example.wsp
+whisper-pandas data/example.wsp
 ```
 
 
@@ -55,11 +55,6 @@ Why?
 * Mucho simpler to use
 * Mucho less likely you will shoot yourself in the foot
 * Mucho speedy
-
-Currently we use `whisper.info` internally to read the metadata,
-and then Numpy & Pandas to read the data,
-using objects for the metadata and some conveniences like quickly
-showing what data is available in a given file or reading zipped files.
 
 Partial reading is not implemented, a given file is always read completely
 and the data directly converted to columnar `pandas.Series` format with
