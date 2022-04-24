@@ -6,6 +6,10 @@ Used for tests and docs.
 
 A real sensor data file with 3 archives.
 
+## example.wsp.gz
+
+Result of `example.wsp.gz` - lossless gzip compressed version.
+
 ## example_truncated.wsp
 
 A truncated corrupt Whisper file for testing.
