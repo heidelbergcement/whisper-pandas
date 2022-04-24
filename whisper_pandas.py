@@ -4,12 +4,14 @@ import dataclasses
 import argparse
 from pathlib import Path
 from typing import List
+from io import BytesIO
 import numpy as np
 import pandas as pd
 
 __all__ = [
     "WhisperFile",
     "WhisperFileMeta",
+    "WhisperArchive",
     "WhisperArchiveMeta",
 ]
 
@@ -50,8 +52,9 @@ class WhisperArchiveMeta:
     points: int
 
     @classmethod
-    def _from_fh(cls, fh, index: int):
-        meta = np.fromfile(fh, dtype=FMT_ARCHIVE_META, count=1)[0]
+    def from_buffer(cls, buffer, index: int):
+        offset = FMT_FILE_META.itemsize + index * FMT_ARCHIVE_META.itemsize
+        meta = np.frombuffer(buffer, dtype=FMT_ARCHIVE_META, count=1, offset=offset)[0]
         return cls(
             index=index,
             offset=int(meta["offset"]),
@@ -86,14 +89,9 @@ class WhisperFileMeta:
     x_files_factor: float
     archives: List[WhisperArchiveMeta]
 
-    @classmethod
-    def read(cls, path) -> "WhisperFileMeta":
-        with Path(path).open("rb") as fh:
-            return WhisperFileMeta._from_fh(fh, path=path)
-
     @staticmethod
-    def _meta_from_fh(fh):
-        meta = np.fromfile(fh, dtype=FMT_FILE_META, count=1)[0]
+    def _meta_from_buffer(buffer: bytes):
+        meta = np.frombuffer(buffer, dtype=FMT_FILE_META, count=1)[0]
         aggregation_method = AGGREGATION_TYPE_TO_METHOD[int(meta["aggregation_type"])]
         return {
             "aggregation_method": aggregation_method,
@@ -103,11 +101,11 @@ class WhisperFileMeta:
         }
 
     @classmethod
-    def _from_fh(cls, fh, path) -> "WhisperFileMeta":
-        file_meta = cls._meta_from_fh(fh)
+    def from_buffer(cls, buffer, path) -> "WhisperFileMeta":
+        file_meta = cls._meta_from_buffer(buffer[0 : FMT_FILE_META.itemsize])
         archives = []
         for idx in range(file_meta["archive_count"]):
-            archive_meta = WhisperArchiveMeta._from_fh(fh, idx)
+            archive_meta = WhisperArchiveMeta.from_buffer(buffer, idx)
             archives.append(archive_meta)
 
         return cls(
@@ -140,6 +138,9 @@ class WhisperFileMeta:
 
     def print_info(self):
         print("path:", self.path)
+        print("actual size:", self.file_size_actual)
+        print("expected size:", self.file_size)
+        print()
         print("aggregation_method:", self.aggregation_method)
         print("max_retention:", self.max_retention)
         print("x_files_factor:", self.x_files_factor)
@@ -148,95 +149,96 @@ class WhisperFileMeta:
             print()
             archive.print_info()
 
-        if self.file_size_mismatch:
-            print("\n*** FILE IS CORRUPT! ***")
-            print("actual size:", self.file_size_actual)
-            print("expected size:", self.file_size)
+@dataclasses.dataclass
+class WhisperArchive:
+    """Whisper file single archive."""
+
+    meta: WhisperArchiveMeta
+    bytes: bytes
+
+    def as_numpy(self):
+        return np.frombuffer(
+            self.bytes, dtype=FMT_POINT, count=self.meta.points, offset=self.meta.offset
+        )
+
+    def as_dataframe(self, dtype: str = "float32") -> pd.DataFrame:
+        data = self.as_numpy()
+        data = data[data["time"] != 0]
+        value = data["val"].astype(dtype)
+        time = data["time"].astype("uint32")
+        df = pd.DataFrame({"timestamp": time, "value": value})
+        return df.sort_values("timestamp")
+
+    # TODO: merge with as_dataframe since they almost do the same?
+    def as_series(self, dtype: str = "float32") -> pd.Series:
+        data = self.as_numpy()
+
+        # That's right, señor. We remove all points with `time==0`.
+        # The spec doesn't say, but apparamento this is what it takes.
+        data = data[data["time"] != 0]
+
+        # The type cast for the values is needed to avoid this error later on
+        # ValueError: Big-endian buffer not supported on little-endian compiler
+        val = data["val"].astype(dtype)
+
+        # Workaround for a performance bug on pandas versions < 1.3
+        # https://github.com/pandas-dev/pandas/issues/42606
+        # int32 max value can represent times up to year 2038
+        index = data["time"].astype("int32")
+        index = pd.to_datetime(index, unit="s", utc=True)
+
+        s = pd.Series(val, index)
+        return s.sort_index()
 
 
 @dataclasses.dataclass
 class WhisperFile:
-    """Whisper file (the whole enchilada, meta + data)."""
+    """Whisper file (metadata and all archives)."""
 
     meta: WhisperFileMeta
-    data: List[pd.Series]
+    bytes: bytes
 
     @classmethod
-    def read(
-        cls,
-        path,
-        archives: List[int] = None,
-        dtype: str = "float32",
-    ) -> "WhisperFile":
-        """Read Whisper archive into a pandas.Series.
+    def read(cls, path: str, compression: str = "infer") -> "WhisperFile":
+        """Read Whisper file.
 
         Parameters
         ----------
         path : str
             Filename
-        archives : list
-            List of archive IDs to read.
-            Highest time resolution is archive 0.
-            Default: all
-        dtype : {"float32", "float64"}
-            Value float data type
+        compression : {"infer", "none", "gzip"}
+            For on-the-fly decompression
         """
-        with Path(path).open("rb") as fh:
-            meta = WhisperFileMeta._from_fh(fh, path=path)
+        path = Path(path)
 
-        data = []
-        for archive_id in range(len(meta.archives)):
-            if archives is None or archive_id in archives:
-                # TODO: pass fh here, avoid 2x file open
-                series = read_whisper_archive(
-                    path, info=meta.archives[archive_id], dtype=dtype
-                )
+        if compression == "infer":
+            if path.suffix == ".gz":
+                compression = "gzip"
             else:
-                series = None
+                compression = "none"
 
-            data.append(series)
+        if compression == "none":
+            buffer = path.read_bytes()
+        elif compression == "gzip":
+            import gzip
+            buffer = path.read_bytes()
+            buffer = gzip.decompress(buffer)
+        else:
+            raise ValueError(f"Invalid compression: {compression!r}")
 
-        return cls(meta=meta, data=data)
+        meta = WhisperFileMeta.from_buffer(buffer, path=path)
 
-    def read_zip(self, path: str):
-        raise NotImplementedError()
+        return cls(meta=meta, bytes=buffer)
+
+    @property
+    def archives(self) -> List[WhisperArchive]:
+        """Whisper file archive list."""
+        return [
+            WhisperArchive(meta=meta, bytes=self.bytes) for meta in self.meta.archives
+        ]
 
     def print_info(self):
         self.meta.print_info()
-
-
-def read_whisper_archive(
-    path: str, info: WhisperArchiveMeta, dtype: str = "float32"
-) -> pd.Series:
-    data = np.fromfile(path, dtype=FMT_POINT, count=info.points, offset=info.offset)
-
-    # That's right, señor. We remove all points with `time==0`.
-    # The spec doesn't say, but apparamento this is what it takes.
-    data = data[data["time"] != 0]
-
-    # The type cast for the values is needed to avoid this error later on
-    # ValueError: Big-endian buffer not supported on little-endian compiler
-    val = data["val"].astype(dtype)
-
-    # Workaround for a performance bug on pandas versions < 1.3
-    # https://github.com/pandas-dev/pandas/issues/42606
-    # int32 max value can represent times up to year 2038
-    index = data["time"].astype("int32")
-    index = pd.to_datetime(index, unit="s", utc=True)
-
-    return pd.Series(val, index).sort_index()
-
-
-def read_whisper_archive_dataframe(
-    path: str, archive_id: int, dtype: str = "float32"
-) -> pd.DataFrame:
-    info = WhisperFileMeta.read(path).archives[archive_id]
-    data = np.fromfile(path, dtype=FMT_POINT, count=info.points, offset=info.offset)
-    data = data[data["time"] != 0]
-    value = data["val"].astype(dtype)
-    time = data["time"].astype("uint32")
-    df = pd.DataFrame({"timestamp": time, "value": value}).sort_values("timestamp")
-    return df
 
 
 def main():

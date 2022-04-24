@@ -13,7 +13,7 @@ def wsp() -> WhisperFile:
 
 @pytest.fixture(scope="session")
 def meta(wsp) -> WhisperFileMeta:
-    return WhisperFileMeta.read("data/example.wsp")
+    return wsp.meta
 
 
 def test_meta(meta):
@@ -41,7 +41,7 @@ def test_meta(meta):
 
 
 def test_data_archive_0(wsp):
-    s = wsp.data[0]
+    s = wsp.archives[0].as_series()
     assert len(s) == 1555200
 
     assert s.index[0] == pd.Timestamp("2020-07-29 08:28:10+0000")
@@ -51,7 +51,7 @@ def test_data_archive_0(wsp):
 
 def test_data_archive_1(wsp):
     """Test if data is read and converted to pandas OK."""
-    s = wsp.data[1]
+    s = wsp.archives[1].as_series()
 
     assert len(s) == 2331015
     assert s.dtype == "float32"
@@ -66,7 +66,7 @@ def test_data_archive_1(wsp):
 
 
 def test_data_archive_2(wsp):
-    s = wsp.data[2]
+    s = wsp.archives[2].as_series()
     assert len(s) == 38855
 
     assert s.index[0] == pd.Timestamp("2017-02-10 07:00:00+0000")
@@ -74,18 +74,17 @@ def test_data_archive_2(wsp):
     assert_allclose(s.iloc[-1], 4.099754, atol=1e-5)
 
 
-def test_read_only_some_archives():
-    wsp = WhisperFile.read("data/example.wsp", archives=[2, 1])
-    assert len(wsp.data) == 3
-    assert wsp.data[0] is None
-    assert len(wsp.data[1]) == 2331015
-    assert len(wsp.data[2]) == 38855
+def test_read_gzip():
+    wsp = WhisperFile.read("data/example.wsp.gz")
+    assert type(wsp.bytes) is bytes
+    assert len(wsp.bytes) == 82785664
+    assert wsp.meta.file_size == 82785664
+    assert wsp.meta.file_size_actual == 21696528
+    wsp.print_info()
 
 
-def test_archive_as_dataframe():
-    # TODO: refactor as property or method on WhisperFile
-    from whisper_pandas import read_whisper_archive_dataframe
-    df = read_whisper_archive_dataframe("data/example.wsp", 1)
+def test_archive_as_dataframe(wsp):
+    df = wsp.archives[1].as_dataframe()
     assert df.shape == (2331015, 2)
     assert df["timestamp"].dtype == "uint32"
     assert df["value"].dtype == "float32"
@@ -95,9 +94,7 @@ def test_print_info(wsp):
     wsp.print_info()
 
 
-def test_truncated(capsys):
+def test_truncated():
     wsp = WhisperFile.read("data/example_truncated.wsp")
+    assert wsp.meta.file_size == 82785664
     assert wsp.meta.file_size_actual == 100000
-    wsp.print_info()
-    captured = capsys.readouterr()
-    assert "FILE IS CORRUPT" in captured.out
