@@ -11,7 +11,6 @@ __all__ = [
     "WhisperFile",
     "WhisperFileMeta",
     "WhisperArchiveMeta",
-    "print_meta",
 ]
 
 # Whisper file element formats
@@ -28,6 +27,7 @@ FMT_ARCHIVE_META = np.dtype(
     [("offset", ">u4"), ("seconds_per_point", ">u4"), ("points", ">u4")]
 )
 FMT_POINT = np.dtype([("time", ">u4"), ("val", ">f8")])
+
 AGGREGATION_TYPE_TO_METHOD = {
     1: "average",
     2: "sum",
@@ -240,18 +240,14 @@ def read_whisper_archive_dataframe(
     return df
 
 
-def print_meta(path: str):
-    wsp = WhisperFile.read(path)
-    wsp.meta.print_info()
-
-
 def main():
     """Command line tool"""
     parser = argparse.ArgumentParser()
     parser.add_argument("path")
     args = parser.parse_args()
 
-    print_meta(args.path)
+    wsp = WhisperFile.read(args.path)
+    wsp.meta.print_info()
 
 
 if __name__ == "__main__":

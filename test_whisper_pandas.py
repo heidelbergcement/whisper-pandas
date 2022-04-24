@@ -1,18 +1,14 @@
+"""Tests for whisper_pandas package."""
 import pytest
 import pandas as pd
 from numpy.testing import assert_allclose
 
-from whisper_pandas import WhisperFile, WhisperFileMeta, WhisperArchiveMeta, print_meta
+from whisper_pandas import WhisperFile, WhisperFileMeta, WhisperArchiveMeta
 
 
 @pytest.fixture(scope="session")
-def wsp_path() -> str:
-    return "example.wsp"
-
-
-@pytest.fixture(scope="session")
-def wsp(wsp_path) -> WhisperFile:
-    return WhisperFile.read(wsp_path)
+def wsp() -> WhisperFile:
+    return WhisperFile.read("example.wsp")
 
 
 @pytest.fixture(scope="session")
@@ -37,16 +33,10 @@ def test_meta(meta):
         index=0, offset=52, seconds_per_point=10, points=1555200
     )
     assert meta.archives[1] == WhisperArchiveMeta(
-        index=1,
-        offset=18662452,
-        seconds_per_point=60,
-        points=5256000,
+        index=1, offset=18662452, seconds_per_point=60, points=5256000,
     )
     assert meta.archives[2] == WhisperArchiveMeta(
-        index=2,
-        offset=81734452,
-        seconds_per_point=3600,
-        points=87601,
+        index=2, offset=81734452, seconds_per_point=3600, points=87601,
     )
 
 
@@ -92,5 +82,5 @@ def test_read_only_some_archives():
     assert len(wsp.data[2]) == 38855
 
 
-def test_print_meta(wsp_path):
-    print_meta(wsp_path)
+def test_print_info(wsp):
+    wsp.print_info()
