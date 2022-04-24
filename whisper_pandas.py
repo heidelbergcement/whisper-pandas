@@ -86,6 +86,11 @@ class WhisperFileMeta:
     x_files_factor: float
     archives: List[WhisperArchiveMeta]
 
+    @classmethod
+    def read(cls, path) -> "WhisperFileMeta":
+        with Path(path).open("rb") as fh:
+            return WhisperFileMeta._from_fh(fh, path=path)
+
     @staticmethod
     def _meta_from_fh(fh):
         meta = np.fromfile(fh, dtype=FMT_FILE_META, count=1)[0]
@@ -162,7 +167,6 @@ class WhisperFile:
         path,
         archives: List[int] = None,
         dtype: str = "float32",
-        meta_only: bool = False,
     ) -> "WhisperFile":
         """Read Whisper archive into a pandas.Series.
 
@@ -176,14 +180,9 @@ class WhisperFile:
             Default: all
         dtype : {"float32", "float64"}
             Value float data type
-        meta_only : bool
-            Only read metadata from file header
         """
         with Path(path).open("rb") as fh:
             meta = WhisperFileMeta._from_fh(fh, path=path)
-
-        if meta_only:
-            return cls(meta=meta, data=[])
 
         data = []
         for archive_id in range(len(meta.archives)):

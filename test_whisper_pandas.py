@@ -13,7 +13,7 @@ def wsp() -> WhisperFile:
 
 @pytest.fixture(scope="session")
 def meta(wsp) -> WhisperFileMeta:
-    return wsp.meta
+    return WhisperFileMeta.read("data/example.wsp")
 
 
 def test_meta(meta):
@@ -40,6 +40,15 @@ def test_meta(meta):
     )
 
 
+def test_data_archive_0(wsp):
+    s = wsp.data[0]
+    assert len(s) == 1555200
+
+    assert s.index[0] == pd.Timestamp("2020-07-29 08:28:10+0000")
+    assert s.index[-1] == pd.Timestamp("2021-07-20 13:39:30+0000")
+    assert_allclose(s.iloc[-1], 4.081736, atol=1e-5)
+
+
 def test_data_archive_1(wsp):
     """Test if data is read and converted to pandas OK."""
     s = wsp.data[1]
@@ -54,15 +63,6 @@ def test_data_archive_1(wsp):
     assert s.index[0] == pd.Timestamp("2017-02-10 07:07:00+0000")
     assert s.index[-1] == pd.Timestamp("2021-07-20 13:39:00+0000")
     assert_allclose(s.iloc[-1], 4.099854, atol=1e-5)
-
-
-def test_data_archive_0(wsp):
-    s = wsp.data[0]
-    assert len(s) == 1555200
-
-    assert s.index[0] == pd.Timestamp("2020-07-29 08:28:10+0000")
-    assert s.index[-1] == pd.Timestamp("2021-07-20 13:39:30+0000")
-    assert_allclose(s.iloc[-1], 4.081736, atol=1e-5)
 
 
 def test_data_archive_2(wsp):
@@ -82,5 +82,22 @@ def test_read_only_some_archives():
     assert len(wsp.data[2]) == 38855
 
 
+def test_archive_as_dataframe():
+    # TODO: refactor as property or method on WhisperFile
+    from whisper_pandas import read_whisper_archive_dataframe
+    df = read_whisper_archive_dataframe("data/example.wsp", 1)
+    assert df.shape == (2331015, 2)
+    assert df["timestamp"].dtype == "uint32"
+    assert df["value"].dtype == "float32"
+
+
 def test_print_info(wsp):
     wsp.print_info()
+
+
+def test_truncated(capsys):
+    wsp = WhisperFile.read("data/example_truncated.wsp")
+    assert wsp.meta.file_size_actual == 100000
+    wsp.print_info()
+    captured = capsys.readouterr()
+    assert "FILE IS CORRUPT" in captured.out
