@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 """WhisperDB Python Pandas Reader."""
+from __future__ import annotations
 import dataclasses
 import argparse
 from pathlib import Path
 from typing import List
-from io import BytesIO
 import numpy as np
 import pandas as pd
 
@@ -52,7 +52,7 @@ class WhisperArchiveMeta:
     points: int
 
     @classmethod
-    def from_buffer(cls, buffer, index: int):
+    def from_buffer(cls, buffer, index: int) -> WhisperArchiveMeta:
         offset = FMT_FILE_META.itemsize + index * FMT_ARCHIVE_META.itemsize
         meta = np.frombuffer(buffer, dtype=FMT_ARCHIVE_META, count=1, offset=offset)[0]
         return cls(
@@ -90,7 +90,7 @@ class WhisperFileMeta:
     archives: List[WhisperArchiveMeta]
 
     @staticmethod
-    def _meta_from_buffer(buffer: bytes):
+    def _meta_from_buffer(buffer: bytes) -> dict:
         meta = np.frombuffer(buffer, dtype=FMT_FILE_META, count=1)[0]
         aggregation_method = AGGREGATION_TYPE_TO_METHOD[int(meta["aggregation_type"])]
         return {
@@ -101,8 +101,8 @@ class WhisperFileMeta:
         }
 
     @classmethod
-    def from_buffer(cls, buffer, path) -> "WhisperFileMeta":
-        file_meta = cls._meta_from_buffer(buffer[0: FMT_FILE_META.itemsize])
+    def from_buffer(cls, buffer: bytes, path: str | Path) -> WhisperFileMeta:
+        file_meta = cls._meta_from_buffer(buffer[0 : FMT_FILE_META.itemsize])
         archives = []
         for idx in range(file_meta["archive_count"]):
             archive_meta = WhisperArchiveMeta.from_buffer(buffer, idx)
@@ -157,7 +157,7 @@ class WhisperArchive:
     meta: WhisperArchiveMeta
     bytes: bytes = dataclasses.field(repr=False)
 
-    def as_numpy(self):
+    def as_numpy(self) -> np.ndarray:
         return np.frombuffer(
             self.bytes, dtype=FMT_POINT, count=self.meta.points, offset=self.meta.offset
         )
@@ -200,12 +200,12 @@ class WhisperFile:
     bytes: bytes = dataclasses.field(repr=False)
 
     @classmethod
-    def read(cls, path: str, compression: str = "infer") -> "WhisperFile":
+    def read(cls, path: str | Path, compression: str = "infer") -> WhisperFile:
         """Read Whisper file.
 
         Parameters
         ----------
-        path : str
+        path : str | Path
             Filename
         compression : {"infer", "none", "gzip"}
             For on-the-fly decompression
@@ -222,6 +222,7 @@ class WhisperFile:
             buffer = path.read_bytes()
         elif compression == "gzip":
             import gzip
+
             buffer = path.read_bytes()
             buffer = gzip.decompress(buffer)
         else:
