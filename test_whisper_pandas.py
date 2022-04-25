@@ -41,20 +41,23 @@ def test_meta(meta):
 
 
 def test_data_archive_0(wsp):
-    s = wsp.archives[0].as_series()
-    assert len(s) == 1555200
+    df = wsp.archives[0].to_frame()
+    assert len(df) == 1555200
 
-    assert s.index[0] == pd.Timestamp("2020-07-29 08:28:10+0000")
-    assert s.index[-1] == pd.Timestamp("2021-07-20 13:39:30+0000")
-    assert_allclose(s.iloc[-1], 4.081736, atol=1e-5)
+    assert df.index[0] == 43687
+    assert df["timestamp"].iloc[0] == pd.Timestamp("2020-07-29 08:28:10+0000")
+
+    assert df.index[-1] == 10995
+    assert df["timestamp"].iloc[-1] == pd.Timestamp("2021-07-20 13:39:30+0000")
+    assert_allclose(df["value"].iloc[-1], 4.081736, atol=1e-5)
 
 
 def test_data_archive_1(wsp):
     """Test if data is read and converted to pandas OK."""
-    s = wsp.archives[1].as_series()
+    s = wsp.archives[1].to_frame().set_index("timestamp")["value"]
 
     assert len(s) == 2331015
-    assert s.dtype == "float32"
+    assert s.dtype == "float64"
 
     assert s.index.is_monotonic
     assert s.index.is_unique
@@ -66,12 +69,23 @@ def test_data_archive_1(wsp):
 
 
 def test_data_archive_2(wsp):
-    s = wsp.archives[2].as_series()
+    s = wsp.archives[2].to_frame().set_index("timestamp")["value"]
     assert len(s) == 38855
 
     assert s.index[0] == pd.Timestamp("2017-02-10 07:00:00+0000")
     assert s.index[-1] == pd.Timestamp("2021-07-20 13:00:00+0000")
     assert_allclose(s.iloc[-1], 4.099754, atol=1e-5)
+
+
+def test_archive_as_dataframe(wsp):
+    df = wsp.archives[1].to_frame(to_datetime=False)
+    assert df.shape == (2331015, 2)
+    assert df["timestamp"].dtype == "int32"
+    assert df["value"].dtype == "float64"
+
+
+def test_print_info(wsp):
+    wsp.print_info()
 
 
 def test_read_gzip():
@@ -80,17 +94,6 @@ def test_read_gzip():
     assert len(wsp.bytes) == 82785664
     assert wsp.meta.file_size == 82785664
     assert wsp.meta.file_size_actual == 21696528
-    wsp.print_info()
-
-
-def test_archive_as_dataframe(wsp):
-    df = wsp.archives[1].as_dataframe()
-    assert df.shape == (2331015, 2)
-    assert df["timestamp"].dtype == "uint32"
-    assert df["value"].dtype == "float32"
-
-
-def test_print_info(wsp):
     wsp.print_info()
 
 

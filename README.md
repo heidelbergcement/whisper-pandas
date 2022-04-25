@@ -20,8 +20,8 @@ Use as Python package:
  WhisperArchiveMeta(index=1, offset=18662452, seconds_per_point=60, points=5256000, retention=315360000),
  WhisperArchiveMeta(index=2, offset=81734452, seconds_per_point=3600, points=87601, retention=315363600)]
 
-# Simple to work with data as `pandas.Series`
->>> wsp.archives[1].as_series()
+# Simple to work with data as `pandas.DataFrame` and `pandas.Series`
+>>> wsp.archives[1].to_frame().set_index("timestamp")
 2017-02-10 07:07:00+00:00    0.000000
 2017-02-10 07:08:00+00:00    0.000000
 2017-02-10 07:09:00+00:00    0.000000

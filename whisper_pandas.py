@@ -28,7 +28,7 @@ DTYPE_FILE_META = np.dtype(
 DTYPE_ARCHIVE_META = np.dtype(
     [("offset", ">u4"), ("seconds_per_point", ">u4"), ("points", ">u4")]
 )
-DTYPE_POINT = np.dtype([("time", ">u4"), ("val", ">f8")])
+DTYPE_POINT = np.dtype([("timestamp", ">u4"), ("value", ">f8")])
 
 AGGREGATION_TYPE_TO_METHOD = {
     1: "average",
@@ -54,7 +54,9 @@ class WhisperArchiveMeta:
     @classmethod
     def from_buffer(cls, buffer, index: int) -> WhisperArchiveMeta:
         offset = DTYPE_FILE_META.itemsize + index * DTYPE_ARCHIVE_META.itemsize
-        meta = np.frombuffer(buffer, dtype=DTYPE_ARCHIVE_META, count=1, offset=offset)[0]
+        meta = np.frombuffer(buffer, dtype=DTYPE_ARCHIVE_META, count=1, offset=offset)[
+            0
+        ]
         return cls(
             index=index,
             offset=int(meta["offset"]),
@@ -70,13 +72,17 @@ class WhisperArchiveMeta:
     def size(self) -> int:
         return DTYPE_POINT.itemsize * self.points
 
-    def print_info(self):
-        print("archive:", self.index)
-        print("offset:", self.offset)
-        print("seconds_per_point:", self.seconds_per_point)
-        print("points:", self.points)
-        print("retention:", self.retention)
-        print("size:", self.size)
+    def describe(self) -> pd.DataFrame:
+        return pd.Series(
+            {
+                "archive": self.index,
+                "seconds_per_point": self.seconds_per_point,
+                "points": self.points,
+                "retention": self.retention,
+                "offset": self.offset,
+                "size": self.size,
+            }
+        ).to_frame(name="value")
 
 
 @dataclasses.dataclass
@@ -102,7 +108,7 @@ class WhisperFileMeta:
 
     @classmethod
     def from_buffer(cls, buffer: bytes, path: str | Path) -> WhisperFileMeta:
-        file_meta = cls._meta_from_buffer(buffer[0: DTYPE_FILE_META.itemsize])
+        file_meta = cls._meta_from_buffer(buffer[0 : DTYPE_FILE_META.itemsize])
         archives = []
         for idx in range(file_meta["archive_count"]):
             archive_meta = WhisperArchiveMeta.from_buffer(buffer, idx)
@@ -119,7 +125,9 @@ class WhisperFileMeta:
     @property
     def header_size(self) -> int:
         """Whisper file header size in bytes"""
-        return DTYPE_FILE_META.itemsize + DTYPE_ARCHIVE_META.itemsize * len(self.archives)
+        return DTYPE_FILE_META.itemsize + DTYPE_ARCHIVE_META.itemsize * len(
+            self.archives
+        )
 
     @property
     def file_size(self) -> int:
@@ -136,18 +144,28 @@ class WhisperFileMeta:
         """Does actual and expected file size according to header match?"""
         return self.file_size != self.file_size_actual
 
-    def print_info(self):
-        print("path:", self.path)
-        print("actual size:", self.file_size_actual)
-        print("expected size:", self.file_size)
-        print()
-        print("aggregation_method:", self.aggregation_method)
-        print("max_retention:", self.max_retention)
-        print("x_files_factor:", self.x_files_factor)
+    def describe_meta(self) -> pd.DataFrame:
+        return pd.Series(
+            {
+                "path": self.path,
+                "actual size": self.file_size_actual,
+                "expected size": self.file_size,
+                "aggregation_method": self.aggregation_method,
+                "max_retention": self.max_retention,
+                "x_files_factor": self.x_files_factor,
+            }
+        ).to_frame(name="value")
 
-        for archive in self.archives:
-            print()
-            archive.print_info()
+    def describe_archives(self) -> pd.DataFrame:
+        """Archive summary information table."""
+        infos = [_.describe()["value"] for _ in self.archives]
+        df = pd.DataFrame(infos).set_index("archive")
+        return df
+
+    def print_info(self):
+        print(self.describe_meta())
+        print()
+        print(self.describe_archives())
 
 
 @dataclasses.dataclass
@@ -157,39 +175,63 @@ class WhisperArchive:
     meta: WhisperArchiveMeta
     bytes: bytes = dataclasses.field(repr=False)
 
-    def as_numpy(self) -> np.ndarray:
+    def to_numpy(self) -> np.ndarray:
         return np.frombuffer(
-            self.bytes, dtype=DTYPE_POINT, count=self.meta.points, offset=self.meta.offset
+            self.bytes,
+            dtype=DTYPE_POINT,
+            count=self.meta.points,
+            offset=self.meta.offset,
         )
 
-    def as_dataframe(self, dtype: str = "float32") -> pd.DataFrame:
-        data = self.as_numpy()
-        data = data[data["time"] != 0]
-        value = data["val"].astype(dtype)
-        time = data["time"].astype("uint32")
-        df = pd.DataFrame({"timestamp": time, "value": value})
-        return df.sort_values("timestamp")
+    def to_frame(
+        self,
+        dtype: str = "float64",
+        to_datetime: bool = True,
+        drop_time_zero: bool = True,
+        time_sort: bool = True,
+    ) -> pd.DataFrame:
+        """Convert archive data to pandas.DataFrame.
 
-    # TODO: merge with as_dataframe since they almost do the same?
-    def as_series(self, dtype: str = "float32") -> pd.Series:
-        data = self.as_numpy()
+        Parameters
+        ----------
+        dtype : str
+            Data type for point values
+        to_datetime : bool
+            Convert from Unix int timestamps to pandas timestamps?
+        drop_time_zero : bool
+            Drop points where time is 0, i.e. that were never filled?
+        time_sort : bool
+            Sort points in chronological order?
 
-        # That's right, señor. We remove all points with `time==0`.
-        # The spec doesn't say, but apparamento this is what it takes.
-        data = data[data["time"] != 0]
+        Returns
+        -------
+        df : pandas.DataFrame
+            Dataframe with columns "timestamp" and "value" and the
+            point position index in the Whisper archive as index.
+        """
+        data = self.to_numpy()
+
+        if drop_time_zero:
+            data = data[data["timestamp"] != 0]
+
+        # The int32 typecast is a workaround for a performance bug
+        # on pandas versions < 1.3 when using uint32
+        # https://github.com/pandas-dev/pandas/issues/42606
+        # int32 max value can represent times up to year 2038
+        timestamp = data["timestamp"].astype("int32")
+        if to_datetime:
+            timestamp = pd.to_datetime(timestamp, unit="s", utc=True)
 
         # The type cast for the values is needed to avoid this error later on
         # ValueError: Big-endian buffer not supported on little-endian compiler
-        val = data["val"].astype(dtype)
+        value = data["value"].astype(dtype)
 
-        # Workaround for a performance bug on pandas versions < 1.3
-        # https://github.com/pandas-dev/pandas/issues/42606
-        # int32 max value can represent times up to year 2038
-        index = data["time"].astype("int32")
-        index = pd.to_datetime(index, unit="s", utc=True)
+        df = pd.DataFrame({"timestamp": timestamp, "value": value})
 
-        s = pd.Series(val, index)
-        return s.sort_index()
+        if time_sort:
+            df = df.sort_values("timestamp")
+
+        return df
 
 
 @dataclasses.dataclass
