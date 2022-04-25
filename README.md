@@ -1,11 +1,12 @@
 # WhisperDB Python Pandas Reader
 
-## Getting started
+## Install
 
-Install:
 ```
 pip install whisper-pandas
 ```
+
+## Basic usage example
 
 Use as Python package:
 ```
@@ -39,6 +40,10 @@ Use as command line tool:
 ```
 whisper-pandas data/example.wsp
 ```
+
+## Tutorial
+
+See [whisper_pandas.ipynb](whisper_pandas.ipynb)
 
 
 ## Description

@@ -17,7 +17,7 @@ __all__ = [
 
 # Whisper file element formats
 # See https://graphite.readthedocs.io/en/latest/whisper.html#database-format
-FMT_FILE_META = np.dtype(
+DTYPE_FILE_META = np.dtype(
     [
         ("aggregation_type", ">u4"),
         ("max_retention", ">u4"),
@@ -25,10 +25,10 @@ FMT_FILE_META = np.dtype(
         ("archive_count", ">u4"),
     ]
 )
-FMT_ARCHIVE_META = np.dtype(
+DTYPE_ARCHIVE_META = np.dtype(
     [("offset", ">u4"), ("seconds_per_point", ">u4"), ("points", ">u4")]
 )
-FMT_POINT = np.dtype([("time", ">u4"), ("val", ">f8")])
+DTYPE_POINT = np.dtype([("time", ">u4"), ("val", ">f8")])
 
 AGGREGATION_TYPE_TO_METHOD = {
     1: "average",
@@ -53,8 +53,8 @@ class WhisperArchiveMeta:
 
     @classmethod
     def from_buffer(cls, buffer, index: int) -> WhisperArchiveMeta:
-        offset = FMT_FILE_META.itemsize + index * FMT_ARCHIVE_META.itemsize
-        meta = np.frombuffer(buffer, dtype=FMT_ARCHIVE_META, count=1, offset=offset)[0]
+        offset = DTYPE_FILE_META.itemsize + index * DTYPE_ARCHIVE_META.itemsize
+        meta = np.frombuffer(buffer, dtype=DTYPE_ARCHIVE_META, count=1, offset=offset)[0]
         return cls(
             index=index,
             offset=int(meta["offset"]),
@@ -68,7 +68,7 @@ class WhisperArchiveMeta:
 
     @property
     def size(self) -> int:
-        return FMT_POINT.itemsize * self.points
+        return DTYPE_POINT.itemsize * self.points
 
     def print_info(self):
         print("archive:", self.index)
@@ -91,7 +91,7 @@ class WhisperFileMeta:
 
     @staticmethod
     def _meta_from_buffer(buffer: bytes) -> dict:
-        meta = np.frombuffer(buffer, dtype=FMT_FILE_META, count=1)[0]
+        meta = np.frombuffer(buffer, dtype=DTYPE_FILE_META, count=1)[0]
         aggregation_method = AGGREGATION_TYPE_TO_METHOD[int(meta["aggregation_type"])]
         return {
             "aggregation_method": aggregation_method,
@@ -102,7 +102,7 @@ class WhisperFileMeta:
 
     @classmethod
     def from_buffer(cls, buffer: bytes, path: str | Path) -> WhisperFileMeta:
-        file_meta = cls._meta_from_buffer(buffer[0 : FMT_FILE_META.itemsize])
+        file_meta = cls._meta_from_buffer(buffer[0: DTYPE_FILE_META.itemsize])
         archives = []
         for idx in range(file_meta["archive_count"]):
             archive_meta = WhisperArchiveMeta.from_buffer(buffer, idx)
@@ -119,7 +119,7 @@ class WhisperFileMeta:
     @property
     def header_size(self) -> int:
         """Whisper file header size in bytes"""
-        return FMT_FILE_META.itemsize + FMT_ARCHIVE_META.itemsize * len(self.archives)
+        return DTYPE_FILE_META.itemsize + DTYPE_ARCHIVE_META.itemsize * len(self.archives)
 
     @property
     def file_size(self) -> int:
@@ -159,7 +159,7 @@ class WhisperArchive:
 
     def as_numpy(self) -> np.ndarray:
         return np.frombuffer(
-            self.bytes, dtype=FMT_POINT, count=self.meta.points, offset=self.meta.offset
+            self.bytes, dtype=DTYPE_POINT, count=self.meta.points, offset=self.meta.offset
         )
 
     def as_dataframe(self, dtype: str = "float32") -> pd.DataFrame:
